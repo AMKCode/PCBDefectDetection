@@ -78,3 +78,4 @@ def evaluate(model, dataloader, device):
 
     print("Accuracy: {:.4f}".format(accuracy))
     print("Balanced Accuracy: {:.4f}".format(balanced_accuracy))
+
