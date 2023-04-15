@@ -5,6 +5,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from sklearn.metrics import confusion_matrix, accuracy_score, balanced_accuracy_score
+import cv2
+from matplotlib.colors import ListedColormap
 
 NEG_CLASS = 1
 
@@ -100,28 +102,6 @@ def plot_confusion_matrix(y_true, y_pred, class_names="auto"):
     plt.xlabel("Predicted labels")
     plt.title("Confusion Matrix")
     plt.show()
-    
-    
-def get_bbox_from_heatmap(heatmap, thres=0.8):
-    """
-    Returns bounding box around the defected area:
-    Upper left and lower right corner.
-    
-    Threshold affects size of the bounding box.
-    The higher the threshold, the wider the bounding box.
-    """
-    binary_map = heatmap > thres
-
-    x_dim = np.max(binary_map, axis=0) * np.arange(0, binary_map.shape[1])
-    x_0 = int(x_dim[x_dim > 0].min())
-    x_1 = int(x_dim.max())
-
-    y_dim = np.max(binary_map, axis=1) * np.arange(0, binary_map.shape[0])
-    y_0 = int(y_dim[y_dim > 0].min())
-    y_1 = int(y_dim.max())
-
-    return x_0, y_0, x_1, y_1
-
 
 def predict_localize(
     model, dataloader, device, thres=0.8, n_samples=9, show_heatmap=False
@@ -135,7 +115,6 @@ def predict_localize(
     model.eval()
 
     class_names = ['non-defective', 'defective']
-    transform_to_PIL = transforms.ToPILImage()
 
     n_cols = 3
     n_rows = int(np.ceil(n_samples / n_cols))
@@ -149,7 +128,12 @@ def predict_localize(
         feature_maps = out[1].to("cpu")
 
         for img_i in range(inputs.size(0)):
-            img = transform_to_PIL(inputs[img_i])
+            img = inputs[img_i].cpu().detach().numpy()
+            img = np.reshape(img, (224, 224))
+            img = img.astype(np.uint8)
+            img[np.where(np.logical_and(img>=0, img<=10))] = 0
+            img[np.where(np.logical_and(img>=240, img<=255))] = 255
+
             class_pred = class_preds[img_i]
             prob = probs[img_i]
             label = labels[img_i]
@@ -157,7 +141,9 @@ def predict_localize(
 
             counter += 1
             plt.subplot(n_rows, n_cols, counter)
-            plt.imshow(img)
+            clrs = ['black', 'red', 'white']
+            if (class_pred != NEG_CLASS):
+                plt.imshow(img, cmap=ListedColormap(clrs))
             plt.axis("off")
             plt.title(
                 "Predicted: {}, Prob: {:.3f}, True Label: {}".format(
@@ -166,19 +152,19 @@ def predict_localize(
             )
 
             if class_pred == NEG_CLASS:
-                x_0, y_0, x_1, y_1 = get_bbox_from_heatmap(heatmap, thres)
-                rectangle = Rectangle(
-                    (x_0, y_0),
-                    x_1 - x_0,
-                    y_1 - y_0,
-                    edgecolor="red",
-                    facecolor="none",
-                    lw=3,
-                )
-                plt.gca().add_patch(rectangle)
+                heat_img = (heatmap > thres) * 255
+                heat_img = heat_img.astype(np.uint8)
+                thresh = cv2.threshold(heat_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+                cnts = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                cnts = cnts[0] if len(cnts) == 2 else cnts[1]
+                # np.save('hmdebug1.npy', img)
+                for c in cnts:
+                    x,y,w,h = cv2.boundingRect(c)
+                    cv2.rectangle(img, (x, y), (x + w, y + h), (120, 120,12), 2)
+                # np.save('hmdebug2.npy', img)
+                plt.imshow(img, cmap=ListedColormap(clrs))
                 if show_heatmap:
                     plt.imshow(heatmap, cmap="Reds", alpha=0.3)
-
             if counter == n_samples:
                 plt.tight_layout()
                 plt.show()
