@@ -11,7 +11,7 @@ class PCBDataset(Dataset):
         self.transform = transform
         self.target_transform = target_transform
         
-        f = open(os.path.join(root, fnames), 'r')
+        f = open(os.path.join(root, self.fnames), 'r')
         fdata = f.read()
         list1 = fdata.replace(' ', '\n').split('\n')
         del list1[1::2]
@@ -19,7 +19,7 @@ class PCBDataset(Dataset):
         for i in list1:
             list2.append(i.split('.')[0] + '_temp.jpg')
             list2.append(i.split('.')[0] + '_test.jpg')
-        
+        f.close()
         self.fnames_list = list2
     def __len__(self):
         return len(self.fnames_list)

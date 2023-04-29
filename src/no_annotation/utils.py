@@ -8,7 +8,8 @@ from sklearn.metrics import confusion_matrix, accuracy_score, balanced_accuracy_
 import cv2
 from matplotlib.colors import ListedColormap
 
-NEG_CLASS = 1
+NEG_CLASS = 1 # the number that represents a defective PCB
+INPUT_IMG_SIZE = (640, 640)
 
 def train(
     dataloader, model, optimizer, criterion, epochs, device, target_accuracy=None
@@ -129,10 +130,9 @@ def predict_localize(
 
         for img_i in range(inputs.size(0)):
             img = inputs[img_i].cpu().detach().numpy()
-            img = np.reshape(img, (224, 224))
-            img = img.astype(np.uint8)
-            img[np.where(np.logical_and(img>=0, img<=10))] = 0
-            img[np.where(np.logical_and(img>=240, img<=255))] = 255
+            img = np.reshape(img, (INPUT_IMG_SIZE[0], INPUT_IMG_SIZE[1])).astype(np.uint8)
+            img[np.where(np.logical_and(img>=0, img<=127))] = 0
+            img[np.where(np.logical_and(img>=128, img<=255))] = 255
 
             class_pred = class_preds[img_i]
             prob = probs[img_i]
@@ -152,16 +152,13 @@ def predict_localize(
             )
 
             if class_pred == NEG_CLASS:
-                heat_img = (heatmap > thres) * 255
-                heat_img = heat_img.astype(np.uint8)
+                heat_img = ((heatmap > thres) * 255).astype(np.uint8)
                 thresh = cv2.threshold(heat_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
                 cnts = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                 cnts = cnts[0] if len(cnts) == 2 else cnts[1]
-                # np.save('hmdebug1.npy', img)
                 for c in cnts:
                     x,y,w,h = cv2.boundingRect(c)
                     cv2.rectangle(img, (x, y), (x + w, y + h), (120, 120,12), 2)
-                # np.save('hmdebug2.npy', img)
                 plt.imshow(img, cmap=ListedColormap(clrs))
                 if show_heatmap:
                     plt.imshow(heatmap, cmap="Reds", alpha=0.3)

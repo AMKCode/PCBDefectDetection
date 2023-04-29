@@ -3,7 +3,7 @@ import torch.nn as nn
 from torchvision import models
 import torch.nn.functional as F
 
-INPUT_IMG_SIZE = (224, 224)
+INPUT_IMG_SIZE = (640, 640)
 
 class CustomVGG16(nn.Module):
     def __init__(self, n_classes=2, pretrained=True):
